@@ -2,6 +2,8 @@ import './globals.css';
 import type { Metadata } from 'next';
 import Header from "@/components/header";
 import Footer from "@/components/footer";
+import { AuthProvider } from "@/lib/auth-context";
+import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://dragonandpanda.space"),
@@ -18,9 +20,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <Header />
-        <main className="min-h-[70vh]">{children}</main>
-        <Footer />
+        <AuthProvider>
+          <Header />
+          <main className="min-h-[70vh]">{children}</main>
+          <Footer />
+          <Toaster />
+        </AuthProvider>
       </body>
     </html>
   );
