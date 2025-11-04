@@ -1,7 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase, XTrend, GitHubRepo, UpdateLog } from '@/lib/supabase';
-import { ExternalLink, TrendingUp, Star, GitBranch, RefreshCw, AlertCircle } from 'lucide-react';
+import { ExternalLink, TrendingUp, Star, GitBranch, RefreshCw, AlertCircle, Activity } from 'lucide-react';
+import DataSourceStatus from './data-source-status';
+import SetupGuide from './setup-guide';
 
 export default function TrendsDashboard() {
   const [xTrends, setXTrends] = useState<XTrend[]>([]);
@@ -78,6 +80,45 @@ export default function TrendsDashboard() {
 
   useEffect(() => {
     fetchData();
+
+    const trendsChannel = supabase
+      .channel('x_trends_changes')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'x_trends'
+      }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    const reposChannel = supabase
+      .channel('github_repos_changes')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'github_repos'
+      }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    const logsChannel = supabase
+      .channel('update_logs_changes')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'update_logs'
+      }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(trendsChannel);
+      supabase.removeChannel(reposChannel);
+      supabase.removeChannel(logsChannel);
+    };
   }, []);
 
   if (loading && xTrends.length === 0) {
@@ -90,17 +131,26 @@ export default function TrendsDashboard() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold">Live Trends & Knowledge</h2>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold">Live Trends & Knowledge</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            Real-time data with automatic fallback sources
+          </p>
+        </div>
         <button
           onClick={triggerUpdate}
           disabled={updating}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500 text-white disabled:opacity-50 hover:bg-brand-600 transition-colors"
         >
           <RefreshCw className={`w-4 h-4 ${updating ? 'animate-spin' : ''}`} />
-          {updating ? 'Updating...' : 'Update Now'}
+          {updating ? 'Updating...' : 'Get Updates'}
         </button>
       </div>
+
+      <SetupGuide />
+
+      <DataSourceStatus />
 
       {error && (
         <div className="flex items-center gap-2 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400">

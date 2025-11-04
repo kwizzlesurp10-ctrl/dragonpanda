@@ -17,15 +17,36 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const results = {
+      health_check: { status: 'skipped', message: '' },
       x_trends: { status: 'skipped', message: '' },
       github_trending: { status: 'skipped', message: '' },
       knowledge_sync: { status: 'skipped', message: '' },
     };
 
+    try {
+      const healthResponse = await fetch(`${supabaseUrl}/functions/v1/health-check`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const healthData = await healthResponse.json();
+      results.health_check = {
+        status: healthResponse.ok ? 'success' : 'error',
+        message: healthData.message || 'Health check completed'
+      };
+    } catch (error) {
+      results.health_check = {
+        status: 'error',
+        message: error.message
+      };
+    }
+
     const { data: recentXUpdate } = await supabase
       .from('update_logs')
       .select('created_at')
-      .eq('source_type', 'x_api')
+      .in('source_type', ['x_api', 'hackernews_api'])
       .eq('status', 'success')
       .order('created_at', { ascending: false })
       .limit(1)
@@ -64,7 +85,7 @@ Deno.serve(async (req: Request) => {
     const { data: recentGitHubUpdate } = await supabase
       .from('update_logs')
       .select('created_at')
-      .eq('source_type', 'github_api')
+      .in('source_type', ['github_api', 'github_trending_fallback'])
       .eq('status', 'success')
       .order('created_at', { ascending: false })
       .limit(1)
