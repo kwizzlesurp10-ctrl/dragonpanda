@@ -19,6 +19,7 @@ Deno.serve(async (req: Request) => {
     const results = {
       x_trends: { status: 'skipped', message: '' },
       github_trending: { status: 'skipped', message: '' },
+      knowledge_sync: { status: 'skipped', message: '' },
     };
 
     const { data: recentXUpdate } = await supabase
@@ -121,6 +122,45 @@ Deno.serve(async (req: Request) => {
         .from('github_repos')
         .delete()
         .lt('fetched_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+    }
+
+    const { data: recentKnowledgeSync } = await supabase
+      .from('update_logs')
+      .select('created_at')
+      .eq('source_type', 'knowledge_sync')
+      .eq('status', 'success')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const shouldSyncKnowledge = !recentKnowledgeSync ||
+      (Date.now() - new Date(recentKnowledgeSync.created_at).getTime()) > 60 * 60 * 1000;
+
+    if (shouldSyncKnowledge && (results.x_trends.status === 'success' || results.github_trending.status === 'success')) {
+      try {
+        const knowledgeResponse = await fetch(`${supabaseUrl}/functions/v1/sync-knowledge`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        const knowledgeData = await knowledgeResponse.json();
+        results.knowledge_sync = {
+          status: knowledgeResponse.ok ? 'success' : 'error',
+          message: knowledgeData.message || knowledgeData.error || 'Unknown status'
+        };
+      } catch (error) {
+        results.knowledge_sync = {
+          status: 'error',
+          message: error.message
+        };
+      }
+    } else {
+      results.knowledge_sync = {
+        status: 'skipped',
+        message: shouldSyncKnowledge ? 'No new data to sync' : 'Synced recently'
+      };
     }
 
     return new Response(

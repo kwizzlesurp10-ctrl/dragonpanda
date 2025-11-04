@@ -7,6 +7,8 @@ export default function Header() {
         <Link href="/" className="font-bold tracking-tight">🐉 Dragon & 🐼 Panda</Link>
         <nav className="flex gap-6 text-sm">
           <Link href="/trends" className="hover:underline">Trends</Link>
+          <Link href="/knowledge" className="hover:underline">Knowledge</Link>
+          <Link href="/dashboard" className="hover:underline">Dashboard</Link>
           <Link href="/privacy" className="hover:underline">Privacy</Link>
           <Link href="/terms" className="hover:underline">Terms</Link>
         </nav>
