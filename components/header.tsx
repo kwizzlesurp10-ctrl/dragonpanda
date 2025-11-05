@@ -6,6 +6,7 @@ export default function Header() {
       <div className="mx-auto max-w-6xl px-4 md:px-6 h-14 flex items-center justify-between">
         <Link href="/" className="font-bold tracking-tight">🐉 Dragon & 🐼 Panda</Link>
         <nav className="flex gap-6 text-sm">
+          <Link href="/search" className="hover:underline font-medium">Search</Link>
           <Link href="/trends" className="hover:underline">Trends</Link>
           <Link href="/knowledge" className="hover:underline">Knowledge</Link>
           <Link href="/dashboard" className="hover:underline">Dashboard</Link>

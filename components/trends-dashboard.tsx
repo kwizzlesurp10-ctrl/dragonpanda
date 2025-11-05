@@ -1,17 +1,24 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase, XTrend, GitHubRepo, UpdateLog } from '@/lib/supabase';
-import { ExternalLink, TrendingUp, Star, GitBranch, RefreshCw, AlertCircle, Activity } from 'lucide-react';
+import { ExternalLink, TrendingUp, Star, GitBranch, RefreshCw, AlertCircle, Activity, Search, Flame } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import DataSourceStatus from './data-source-status';
 import SetupGuide from './setup-guide';
+import AdvancedSearch from './advanced-search';
 
 export default function TrendsDashboard() {
+  const router = useRouter();
   const [xTrends, setXTrends] = useState<XTrend[]>([]);
   const [githubRepos, setGithubRepos] = useState<GitHubRepo[]>([]);
+  const [hackerNewsItems, setHackerNewsItems] = useState<any[]>([]);
   const [updateLogs, setUpdateLogs] = useState<UpdateLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [trendingItems, setTrendingItems] = useState<any[]>([]);
 
   const fetchData = async () => {
     try {
@@ -43,11 +50,48 @@ export default function TrendsDashboard() {
       setXTrends(trendsRes.data || []);
       setGithubRepos(reposRes.data || []);
       setUpdateLogs(logsRes.data || []);
+
+      fetchTrendingItems();
+      fetchHackerNews();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data');
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchTrendingItems = async () => {
+    try {
+      const response = await fetch('/api/search?action=trending-items&limit=6');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setTrendingItems(data.data.trendingItems || []);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching trending items:', error);
+    }
+  };
+
+  const fetchHackerNews = async () => {
+    try {
+      const response = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json');
+      const storyIds = await response.json();
+      const topStories = await Promise.all(
+        storyIds.slice(0, 5).map(async (id: number) => {
+          const storyRes = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`);
+          return storyRes.json();
+        })
+      );
+      setHackerNewsItems(topStories.filter(story => story && story.url));
+    } catch (error) {
+      console.error('Error fetching HackerNews:', error);
+    }
+  };
+
+  const handleSearch = (query: string) => {
+    router.push(`/search?q=${encodeURIComponent(query)}`);
   };
 
   const triggerUpdate = async () => {
@@ -131,22 +175,81 @@ export default function TrendsDashboard() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-bold">Live Trends & Knowledge</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Real-time data with automatic fallback sources
-          </p>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-bold">Live Trends & Knowledge</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              Real-time data with automatic fallback sources
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => router.push('/search')}
+              className="flex items-center gap-2"
+            >
+              <Search className="h-4 w-4" />
+              Advanced Search
+            </Button>
+            <button
+              onClick={triggerUpdate}
+              disabled={updating}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500 text-white disabled:opacity-50 hover:bg-brand-600 transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 ${updating ? 'animate-spin' : ''}`} />
+              {updating ? 'Updating...' : 'Get Updates'}
+            </button>
+          </div>
         </div>
-        <button
-          onClick={triggerUpdate}
-          disabled={updating}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500 text-white disabled:opacity-50 hover:bg-brand-600 transition-colors"
-        >
-          <RefreshCw className={`w-4 h-4 ${updating ? 'animate-spin' : ''}`} />
-          {updating ? 'Updating...' : 'Get Updates'}
-        </button>
+
+        <div className="w-full">
+          <AdvancedSearch
+            onSearch={handleSearch}
+            placeholder="Quick search across all trends..."
+            showTrending={true}
+          />
+        </div>
       </div>
+
+      {trendingItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Flame className="h-5 w-5 text-orange-500" />
+              Hottest Right Now
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-3 gap-4">
+              {trendingItems.slice(0, 6).map((item) => (
+                <a
+                  key={item.id}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-3 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group"
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <span className="text-xs font-semibold text-orange-600 uppercase">
+                      {item.type === 'x_trend' ? 'X' : item.type === 'github_repo' ? 'GitHub' : 'Knowledge'}
+                    </span>
+                    {item.trendingScore && (
+                      <span className="text-xs font-bold text-orange-600">
+                        {Math.round(item.trendingScore)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-medium text-sm line-clamp-2">{item.title}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    {item.engagement.toLocaleString()} {item.type === 'x_trend' ? 'posts' : 'stars'}
+                  </p>
+                </a>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <SetupGuide />
 
@@ -159,7 +262,7 @@ export default function TrendsDashboard() {
         </div>
       )}
 
-      <div className="grid md:grid-cols-2 gap-8">
+      <div className="grid md:grid-cols-3 gap-8">
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-brand-500" />
@@ -169,7 +272,7 @@ export default function TrendsDashboard() {
           {xTrends.length === 0 ? (
             <div className="p-6 rounded-lg border text-center text-gray-500">
               <p>No trends available yet.</p>
-              <p className="text-sm mt-2">Click "Update Now" to fetch latest trends.</p>
+              <p className="text-sm mt-2">Click "Get Updates" to fetch latest trends.</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -205,7 +308,7 @@ export default function TrendsDashboard() {
           {githubRepos.length === 0 ? (
             <div className="p-6 rounded-lg border text-center text-gray-500">
               <p>No repositories available yet.</p>
-              <p className="text-sm mt-2">Click "Update Now" to fetch trending repos.</p>
+              <p className="text-sm mt-2">Click "Get Updates" to fetch trending repos.</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -232,6 +335,49 @@ export default function TrendsDashboard() {
                           <span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800">
                             {repo.language}
                           </span>
+                        )}
+                      </div>
+                    </div>
+                    <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity ml-2" />
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Activity className="w-5 h-5 text-orange-500" />
+            <h3 className="text-xl font-semibold">HackerNews Top Stories</h3>
+          </div>
+
+          {hackerNewsItems.length === 0 ? (
+            <div className="p-6 rounded-lg border text-center text-gray-500">
+              <p>Loading stories...</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {hackerNewsItems.map((item) => (
+                <a
+                  key={item.id}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block p-4 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{item.title}</p>
+                      <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                        {item.score && (
+                          <span className="flex items-center gap-1">
+                            <Star className="w-3 h-3" />
+                            {item.score} points
+                          </span>
+                        )}
+                        {item.descendants > 0 && (
+                          <span>{item.descendants} comments</span>
                         )}
                       </div>
                     </div>
